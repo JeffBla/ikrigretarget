@@ -2,7 +2,7 @@
 Open Asset Import Library (assimp)
 ----------------------------------------------------------------------
 
-Copyright (c) 2006-2022, assimp team
+Copyright (c) 2006-2024, assimp team
 
 All rights reserved.
 
@@ -62,11 +62,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 using namespace Assimp;
 using namespace glTF;
 
-//
-// glTFImporter
-//
-
-static const aiImporterDesc desc = {
+static constexpr aiImporterDesc desc = {
     "glTF Importer",
     "",
     "",
@@ -93,7 +89,10 @@ const aiImporterDesc *glTFImporter::GetInfo() const {
 bool glTFImporter::CanRead(const std::string &pFile, IOSystem *pIOHandler, bool /* checkSig */) const {
     glTF::Asset asset(pIOHandler);
     try {
-        asset.Load(pFile, GetExtension(pFile) == "glb");
+        asset.Load(pFile,
+                   CheckMagicToken(
+                       pIOHandler, pFile, AI_GLB_MAGIC_NUMBER, 1, 0,
+                       static_cast<unsigned int>(strlen(AI_GLB_MAGIC_NUMBER))));
         return asset.asset;
     } catch (...) {
         return false;
@@ -697,7 +696,10 @@ void glTFImporter::InternReadFile(const std::string &pFile, aiScene *pScene, IOS
 
     // read the asset file
     glTF::Asset asset(pIOHandler);
-    asset.Load(pFile, GetExtension(pFile) == "glb");
+    asset.Load(pFile,
+               CheckMagicToken(
+                   pIOHandler, pFile, AI_GLB_MAGIC_NUMBER, 1, 0,
+                   static_cast<unsigned int>(strlen(AI_GLB_MAGIC_NUMBER))));
 
     //
     // Copy the data out

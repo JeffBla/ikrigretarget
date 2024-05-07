@@ -3,7 +3,7 @@
 Open Asset Import Library (assimp)
 ---------------------------------------------------------------------------
 
-Copyright (c) 2006-2022, assimp team
+Copyright (c) 2006-2024, assimp team
 
 All rights reserved.
 
@@ -839,7 +839,6 @@ void XFileParser::ParseDataObjectAnimationKey(AnimBone *pAnimBone) {
 
         default:
             ThrowException("Unknown key type ", keyType, " in animation.");
-            break;
         } // end switch
 
         // key separator

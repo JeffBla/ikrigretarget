@@ -2,7 +2,7 @@
 Open Asset Import Library (assimp)
 ----------------------------------------------------------------------
 
-Copyright (c) 2006-2022, assimp team
+Copyright (c) 2006-2024, assimp team
 
 
 All rights reserved.
@@ -396,10 +396,6 @@ struct Material {
     }
 
     Material(const Material &other) = default;
-
-    Material(Material &&other) AI_NO_EXCEPT = default;
-
-    Material &operator=(Material &&other) AI_NO_EXCEPT = default;
 
     virtual ~Material() = default;
 

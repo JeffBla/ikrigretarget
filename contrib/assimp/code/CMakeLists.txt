@@ -1,6 +1,6 @@
 # Open Asset Import Library (assimp)
 # ----------------------------------------------------------------------
-# Copyright (c) 2006-2022, assimp team
+# Copyright (c) 2006-2024, assimp team
 #
 # All rights reserved.
 #
@@ -42,7 +42,7 @@
 # 3) Add libassimp using the file lists (eliminates duplication of file names between
 #    source groups and library command)
 #
-cmake_minimum_required( VERSION 3.10 )
+cmake_minimum_required( VERSION 3.22 )
 SET( HEADER_PATH ../include/assimp )
 
 if(NOT ANDROID AND ASSIMP_ANDROID_JNIIOSYSTEM)
@@ -194,6 +194,8 @@ SET( Common_SRCS
   Common/ScenePreprocessor.cpp
   Common/ScenePreprocessor.h
   Common/SkeletonMeshBuilder.cpp
+  Common/StackAllocator.h
+  Common/StackAllocator.inl
   Common/StandardShapes.cpp
   Common/TargetAnimation.cpp
   Common/TargetAnimation.h
@@ -921,26 +923,26 @@ IF(ASSIMP_HUNTER_ENABLED)
   hunter_add_package(utf8)
   find_package(utf8cpp CONFIG REQUIRED)
 ELSE()
-  # utf8 is header-only, so Assimp doesn't need to do anything.
+  INCLUDE_DIRECTORIES("../contrib/utf8cpp/source")
 ENDIF()
 
 # polyclipping
-IF(ASSIMP_HUNTER_ENABLED)
-  hunter_add_package(polyclipping)
-  find_package(polyclipping CONFIG REQUIRED)
-ELSE()
+#IF(ASSIMP_HUNTER_ENABLED)
+#  hunter_add_package(polyclipping)
+#  find_package(polyclipping CONFIG REQUIRED)
+#ELSE()
   SET( Clipper_SRCS
     ../contrib/clipper/clipper.hpp
     ../contrib/clipper/clipper.cpp
   )
   SOURCE_GROUP( Contrib\\Clipper FILES ${Clipper_SRCS})
-ENDIF()
+#ENDIF()
 
 # poly2tri
-IF(ASSIMP_HUNTER_ENABLED)
-  hunter_add_package(poly2tri)
-  find_package(poly2tri CONFIG REQUIRED)
-ELSE()
+#IF(ASSIMP_HUNTER_ENABLED)
+#  hunter_add_package(poly2tri)
+#  find_package(poly2tri CONFIG REQUIRED)
+#ELSE()
   SET( Poly2Tri_SRCS
     ../contrib/poly2tri/poly2tri/common/shapes.cc
     ../contrib/poly2tri/poly2tri/common/shapes.h
@@ -955,7 +957,7 @@ ELSE()
     ../contrib/poly2tri/poly2tri/sweep/sweep_context.h
   )
   SOURCE_GROUP( Contrib\\Poly2Tri FILES ${Poly2Tri_SRCS})
-ENDIF()
+#ENDIF()
 
 # minizip/unzip
 IF(ASSIMP_HUNTER_ENABLED)
@@ -963,7 +965,6 @@ IF(ASSIMP_HUNTER_ENABLED)
   find_package(minizip CONFIG REQUIRED)
 ELSE()
   SET( unzip_SRCS
-    ../contrib/unzip/crypt.c
     ../contrib/unzip/crypt.h
     ../contrib/unzip/ioapi.c
     ../contrib/unzip/ioapi.h
@@ -1192,10 +1193,67 @@ ENDIF ()
 
 TARGET_USE_COMMON_OUTPUT_DIRECTORY(assimp)
 
+add_compile_options(
+  "$<$<CONFIG:DEBUG>:-O0;-g3;-ggdb>"
+)
+
 IF (ASSIMP_WARNINGS_AS_ERRORS)
   MESSAGE(STATUS "Treating all warnings as errors (for assimp library only)")
   IF (MSVC)
-    TARGET_COMPILE_OPTIONS(assimp PRIVATE /W4 /WX)
+
+    IF(CMAKE_CXX_COMPILER_ID MATCHES "Clang" ) # clang-cl
+      TARGET_COMPILE_OPTIONS(assimp PRIVATE -Wall -Werror
+        -Wno-microsoft-enum-value
+        -Wno-switch-enum
+        -Wno-covered-switch-default
+        -Wno-reserved-identifier
+        -Wno-c++98-compat-pedantic
+        -Wno-c++98-compat
+        -Wno-documentation
+        -Wno-documentation-unknown-command
+        -Wno-deprecated-dynamic-exception-spec
+        -Wno-undef
+        -Wno-suggest-destructor-override
+        -Wno-suggest-override
+        -Wno-zero-as-null-pointer-constant
+        -Wno-global-constructors
+        -Wno-exit-time-destructors
+        -Wno-extra-semi-stmt
+        -Wno-missing-prototypes
+        -Wno-old-style-cast
+        -Wno-cast-align
+        -Wno-cast-qual
+        -Wno-float-equal
+        -Wno-implicit-int-float-conversion
+        -Wno-sign-conversion
+        -Wno-implicit-float-conversion
+        -Wno-implicit-int-conversion
+        -Wno-float-conversion
+        -Wno-double-promotion
+        -Wno-unused-macros
+        -Wno-disabled-macro-expansion
+        -Wno-shadow-field
+        -Wno-shadow
+        -Wno-language-extension-token
+        -Wno-header-hygiene
+        -Wno-tautological-value-range-compare
+        -Wno-tautological-type-limit-compare
+        -Wno-missing-variable-declarations
+        -Wno-extra-semi
+        -Wno-nonportable-system-include-path
+        -Wno-undefined-reinterpret-cast
+        -Wno-shift-sign-overflow
+        -Wno-deprecated
+        -Wno-format-nonliteral
+        -Wno-comma
+        -Wno-implicit-fallthrough
+        -Wno-unused-template
+        -Wno-undefined-func-template
+        -Wno-declaration-after-statement
+      )
+    ELSE()
+      TARGET_COMPILE_OPTIONS(assimp PRIVATE /W4 /WX)
+    ENDIF()
   ELSE()
     TARGET_COMPILE_OPTIONS(assimp PRIVATE -Wall -Werror)
   ENDIF()
@@ -1213,9 +1271,9 @@ TARGET_INCLUDE_DIRECTORIES ( assimp PUBLIC
 IF(ASSIMP_HUNTER_ENABLED)
   TARGET_LINK_LIBRARIES(assimp
       PUBLIC
-      polyclipping::polyclipping
+      #polyclipping::polyclipping
       openddlparser::openddl_parser
-      poly2tri::poly2tri
+      #poly2tri::poly2tri
       minizip::minizip
       ZLIB::zlib
       RapidJSON::rapidjson
@@ -1228,7 +1286,7 @@ IF(ASSIMP_HUNTER_ENABLED)
   endif()
 
   if (ASSIMP_BUILD_DRACO)
-    target_link_libraries(assimp PUBLIC ${draco_LIBRARIES})
+    target_link_libraries(assimp PRIVATE ${draco_LIBRARIES})
   endif()
 ELSE()
   TARGET_LINK_LIBRARIES(assimp ${ZLIB_LIBRARIES} ${OPENDDL_PARSER_LIBRARIES})
@@ -1326,7 +1384,12 @@ ENDIF()
 IF(NOT ASSIMP_HUNTER_ENABLED)
   if (UNZIP_FOUND)
     INCLUDE_DIRECTORIES(${UNZIP_INCLUDE_DIRS})
-    TARGET_LINK_LIBRARIES(assimp ${UNZIP_LIBRARIES})
+    # TODO if cmake required version has been updated to >3.12.0, collapse this to the second case only
+    if(${CMAKE_VERSION} VERSION_LESS "3.12.0")
+      TARGET_LINK_LIBRARIES(assimp ${UNZIP_LIBRARIES})
+    else()
+      TARGET_LINK_LIBRARIES(assimp ${UNZIP_LINK_LIBRARIES})
+    endif()
   else ()
     INCLUDE_DIRECTORIES("../")
   endif ()
@@ -1334,22 +1397,23 @@ ENDIF()
 
 # Add RT-extension library for glTF importer with Open3DGC-compression.
 IF (RT_FOUND AND ASSIMP_IMPORTER_GLTF_USE_OPEN3DGC)
-  TARGET_LINK_LIBRARIES(assimp ${RT_LIBRARY})
+  TARGET_LINK_LIBRARIES(assimp rt)
 ENDIF ()
 
+IF(ASSIMP_INSTALL)
+  INSTALL( TARGETS assimp
+    EXPORT "${TARGETS_EXPORT_NAME}"
+    LIBRARY DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
+    ARCHIVE DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP-DEV_COMPONENT}
+    RUNTIME DESTINATION ${ASSIMP_BIN_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
+    FRAMEWORK DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
+    INCLUDES DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}
+  )
+  INSTALL( FILES ${PUBLIC_HEADERS} DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}/assimp COMPONENT assimp-dev)
+  INSTALL( FILES ${COMPILER_HEADERS} DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}/assimp/Compiler COMPONENT assimp-dev)
+ENDIF()
 
-INSTALL( TARGETS assimp
-  EXPORT "${TARGETS_EXPORT_NAME}"
-  LIBRARY DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
-  ARCHIVE DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP-DEV_COMPONENT}
-  RUNTIME DESTINATION ${ASSIMP_BIN_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
-  FRAMEWORK DESTINATION ${ASSIMP_LIB_INSTALL_DIR} COMPONENT ${LIBASSIMP_COMPONENT}
-  INCLUDES DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}
-)
-INSTALL( FILES ${PUBLIC_HEADERS} DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}/assimp COMPONENT assimp-dev)
-INSTALL( FILES ${COMPILER_HEADERS} DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}/assimp/Compiler COMPONENT assimp-dev)
-
-if (ASSIMP_ANDROID_JNIIOSYSTEM)
+if (ASSIMP_ANDROID_JNIIOSYSTEM AND ASSIMP_INSTALL)
   INSTALL(FILES ${HEADER_PATH}/${ASSIMP_ANDROID_JNIIOSYSTEM_PATH}/AndroidJNIIOSystem.h
     DESTINATION ${ASSIMP_INCLUDE_INSTALL_DIR}
     COMPONENT assimp-dev)
@@ -1364,25 +1428,29 @@ if(MSVC AND ASSIMP_INSTALL_PDB)
       COMPILE_PDB_NAME assimp${LIBRARY_SUFFIX}
       COMPILE_PDB_NAME_DEBUG assimp${LIBRARY_SUFFIX}${CMAKE_DEBUG_POSTFIX}
     )
-  ENDIF()
 
-  IF(CMAKE_GENERATOR MATCHES "^Visual Studio")
-    install(FILES ${Assimp_BINARY_DIR}/code/Debug/assimp${LIBRARY_SUFFIX}${CMAKE_DEBUG_POSTFIX}.pdb
-      DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
-      CONFIGURATIONS Debug
-    )
-    install(FILES ${Assimp_BINARY_DIR}/code/RelWithDebInfo/assimp${LIBRARY_SUFFIX}.pdb
-      DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
-      CONFIGURATIONS RelWithDebInfo
-    )
+    IF(GENERATOR_IS_MULTI_CONFIG)
+      install(FILES ${Assimp_BINARY_DIR}/code/Debug/assimp${LIBRARY_SUFFIX}${CMAKE_DEBUG_POSTFIX}.pdb
+        DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        CONFIGURATIONS Debug
+      )
+      install(FILES ${Assimp_BINARY_DIR}/code/RelWithDebInfo/assimp${LIBRARY_SUFFIX}.pdb
+        DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        CONFIGURATIONS RelWithDebInfo
+      )
+    ELSE()
+      install(FILES ${Assimp_BINARY_DIR}/code/assimp${LIBRARY_SUFFIX}${CMAKE_DEBUG_POSTFIX}.pdb
+        DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        CONFIGURATIONS Debug
+      )
+      install(FILES ${Assimp_BINARY_DIR}/code/assimp${LIBRARY_SUFFIX}.pdb
+        DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
+        CONFIGURATIONS RelWithDebInfo
+      )
+    ENDIF()
   ELSE()
-    install(FILES ${Assimp_BINARY_DIR}/code/assimp${LIBRARY_SUFFIX}${CMAKE_DEBUG_POSTFIX}.pdb
+    install(FILES $<TARGET_PDB_FILE:assimp>
       DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
-      CONFIGURATIONS Debug
-    )
-    install(FILES ${Assimp_BINARY_DIR}/code/assimp${LIBRARY_SUFFIX}.pdb
-      DESTINATION ${ASSIMP_LIB_INSTALL_DIR}
-      CONFIGURATIONS RelWithDebInfo
     )
   ENDIF()
 ENDIF ()

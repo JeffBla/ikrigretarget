@@ -2,7 +2,7 @@
 Open Asset Import Library (assimp)
 ----------------------------------------------------------------------
 
-Copyright (c) 2006-2022, assimp team
+Copyright (c) 2006-2024, assimp team
 
 All rights reserved.
 
@@ -58,6 +58,7 @@ struct aiMesh;
 struct aiNodeAnim;
 struct aiNode;
 struct aiMaterial;
+struct aiCamera;
 
 namespace Assimp    {
 
@@ -109,6 +110,14 @@ protected:
      * @param pAnim The bone animation to transform
      */
     void ProcessAnimation( aiNodeAnim* pAnim);
+
+    // -------------------------------------------------------------------
+    /** Converts a single camera to left handed coordinates.
+     * The camera viewing direction is inverted by reflecting mLookAt
+     * across mPosition.
+     * @param pCam The camera to convert
+     */
+    void ProcessCamera( aiCamera* pCam);
 };
 
 
