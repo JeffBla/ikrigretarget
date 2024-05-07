@@ -2,8 +2,12 @@
 # local build(s)
 ikrigretarget.egg-info*
 build*
+cmake-build-debug
 # model*
 model/out.fbx
 /.vs
 /.vscode
 .DS_Store
+.idea
+
+model_origin
