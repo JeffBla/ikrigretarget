@@ -153,6 +153,86 @@ static SoulIKRigRetargetConfig config_s1_meta_error() {
     return config;
 }
 
+static SoulIKRigRetargetConfig config_human_withEyes_pingpong_meta() {
+    SoulIKRigRetargetConfig config;
+    config.SourceCoord      = CoordType::RightHandYupZfront;
+    config.WorkCoord        = CoordType::RightHandYupZfront;
+    config.TargetCoord      = CoordType::RightHandYupZfront;
+
+    config.SourceRootType   = ERootType::RootZMinusGroundZ;
+    config.TargetRootType   = ERootType::RootZ;
+
+    config.SourceRootBone   = "hip";
+    config.SourceGroundBone = "lFoot";
+    config.TargetRootBone   = "Hips";
+    config.TargetGroundBone = "LeftFoot";
+
+    config.SourceChains = {
+            // name     start               end
+            // spine
+            {"spine",   "abdomen",            "chest"},
+
+            // head
+            {"head",    "neck",             "head"},
+
+            //{"lleg",    "LeftHip",          "LeftAnkle"},
+            {"lleg",   "lThigh",          "lFoot"},
+
+            //{"rleg",    "RightHip",         "RightAnkle"},
+            {"rleg",   "rThigh",         "rFoot"},
+
+            //{"larm",    "LeftShoulder",     "LeftWrist"},
+            {"larm", "lCollar", "lHand"},
+
+            //{"rram",    "RightShoulder",    "RightWrist"},
+            {"rarm", "rCollar", "rHand"},
+    };
+
+    config.TargetChains = {
+            // name    start        end
+            // spine
+            {"spine", "LowerBack", "Spine1"},
+
+            // head
+            {"head", "Neck", "Head"},
+
+            //{"lleg",    "Rol01_Leg01Up01Jnt_L",     "Rol01_Leg01AnkleJnt_L"},
+            {"lleg", "LeftUpLeg", "LeftFoot"},
+
+            //{"rleg",    "Rol01_Leg01Up01Jnt_R",     "Rol01_Leg01AnkleJnt_R"},
+            {"rleg", "RightUpLeg", "RightFoot"},
+
+            //{"larm",    "Rol01_Arm01Up01Jnt_L",     "Rol01_Arm01Low03Jnt_L"},
+            {"larm", "LeftShoulder", "LeftHand"},
+
+            //{"rram",    "Rol01_Arm01Up01Jnt_R",    "Rol01_Arm01Low03Jnt_R"},
+            {"rarm", "RightShoulder", "RightHand"},
+    };
+
+    config.ChainMapping = {
+            // fk   ik      sourceChain     targetChain
+
+            // spine
+            {true,  false,  "spine",        "spine"},
+
+            // head
+            {true,  false,  "head",         "head"},
+
+            // lleg
+            {true,  false,  "lleg",        "lleg"},
+
+            // rleg
+            {true,  false,  "rleg",        "rleg"},
+
+            // larm
+            {true,  false,  "larm",        "larm"},
+
+            // rarm
+            {true,  false,  "rarm",        "rarm"},
+    };
+
+    return config;
+}
 
 static SoulIKRigRetargetConfig config_s1_meta() {
     SoulIKRigRetargetConfig config;
@@ -540,6 +620,20 @@ struct TestCase {
     bool isTargetNeedHardCodeTPose{ false };
 };
 
+TestCase case_human_withEyes_pingpong(){
+    TestCase testCase;
+
+    testCase.config = config_human_withEyes_pingpong_meta();
+    testCase.srcAnimationFile = "mMotion.fbx";
+    testCase.srcTPoseFile = "MocapNetTpose.fbx";
+    testCase.targetFile = "cmu__human_texture_noLeftBone.fbx";
+    testCase.targetTPoseFile = "cmu__human_texture_noLeftBone.fbx";
+    testCase.outFile = "out.fbx";
+    testCase.isTargetNeedHardCodeTPose = false;
+
+    return testCase;
+}
+
 TestCase case_S1SittingDown() {
     
     TestCase testCase;
@@ -646,7 +740,7 @@ int main(int argc, char *argv[]) {
 
     /////////////////////////////////////////////
     // setting of coord
-    TestCase testCase       = case_Flair2(); 
+    TestCase testCase       = case_human_withEyes_pingpong();
     //TestCase testCase       = case_S1Walking();
     //TestCase testCase       = case_gpt();
     auto config             = testCase.config;

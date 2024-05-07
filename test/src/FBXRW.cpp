@@ -5,64 +5,85 @@
 //  Created by kai chen on 3/24/23.
 //
 #include "FBXRW.h"
+
 #include <iostream>
-#include "assimp/Importer.hpp"
-#include "assimp/scene.h"
-#include "assimp/postprocess.h"
+
 #include "assimp/Exporter.hpp"
+#include "assimp/Importer.hpp"
+#include "assimp/postprocess.h"
+#include "assimp/scene.h"
 
 using namespace SoulIK;
 using namespace Assimp;
-#define KINDA_SMALL_NUMBER  (1.e-4f)
+#define KINDA_SMALL_NUMBER (1.e-4f)
 
 typedef std::shared_ptr<SoulSkeletonMesh> SoulSkeletonMeshPtr;
 
 namespace SoulIK {
-class FBXRWImpl {
-public:
+    class FBXRWImpl {
+    public:
+        std::vector<Texture> textures_loaded;  // stores all the textures loaded so far, optimization to make sure textures aren't loaded more than once.
+        std::string directory;
+        std::vector<aiMaterial *> materials;
 
-    bool hasAnimation(){return m_hasAnimation; }
+        bool hasAnimation() { return m_hasAnimation; }
 
-    void processNode(aiNode* node, const aiScene* scene, SoulScene& fbxScene,
-        SoulNode* parentSoulNode,
-        std::vector<std::string>& materialNames, 
-        std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames, std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes);
+        void processNode(aiNode *node, const aiScene *scene, SoulScene &fbxScene,
+                         SoulNode *parentSoulNode,
+                         std::vector<std::string> &materialNames,
+                         std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames,
+                         std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes);
 
-    void processMetaData(std::vector<SoulMetaData>& fbxMetadata, aiMetadata* aimetaData);
-    
-    SoulSkeletonMeshPtr processMesh(aiMesh* mesh, const aiScene* scene, std::vector<std::string>& materialNames, 
-        std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames);
-    
-    void processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh, 
-        std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames);
+        void processMetaData(std::vector<SoulMetaData> &fbxMetadata, aiMetadata *aimetaData);
 
-    void sortJointsByNodeTree(std::vector<SoulJoint> &joints, std::vector<std::string> &jointNames, 
-        const std::vector<aiNode*>& nodes, std::vector<std::string> &nodeNames);
-    
-    void processSkeletonAnimation(const aiScene* scene, SoulSkeletonMesh &fbxMesh);
+        SoulSkeletonMeshPtr processMesh(aiMesh *mesh, const aiScene *scene, std::vector<std::string> &materialNames,
+                                        std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames);
 
-    void buildSkeletonTree(std::vector<SoulJoint>& joints, std::vector<std::string>& jointNames, 
-        const std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames);
+        void processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
+                             std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames);
 
-    void createMeshes(std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes, aiScene* scene);
-    void createDefaultMaterial(aiScene* scene);
-    void createNodes(aiScene* scene, SoulScene& fbxScene);
-    void createMesh(SoulSkeletonMesh& fbxMesh, aiMesh* mesh, aiScene* scene);
-    void createNode(SoulNode* node, aiNode* parentNode, aiScene* scene, int32_t nodeIndex);
-    void createSkeleton(SoulSkeletonMesh &fbxMesh, aiMesh* mesh);
-    void createSkeletonAnimation(std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes, aiScene* scene);
+        void sortJointsByNodeTree(std::vector<SoulJoint> &joints, std::vector<std::string> &jointNames,
+                                  const std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames);
 
-    bool generateMeshFromPureSkeleton(SoulScene& soulScene, std::string const& rootBoneName);
-public:
-    Importer importer;
-    bool m_hasAnimation{false};
-};
+        void processSkeletonAnimation(const aiScene *scene, SoulSkeletonMesh &fbxMesh);
+
+        void buildSkeletonTree(std::vector<SoulJoint> &joints, std::vector<std::string> &jointNames,
+                               const std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames);
+
+        void createMeshes(std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes, aiScene *scene);
+
+        void createDefaultMaterial(aiScene *scene);
+
+        void createNodes(aiScene *scene, SoulScene &fbxScene);
+
+        void createMesh(SoulSkeletonMesh &fbxMesh, aiMesh *mesh, aiScene *scene);
+
+        void createNode(SoulNode *node, aiNode *parentNode, aiScene *scene, int32_t nodeIndex);
+
+        void createSkeleton(SoulSkeletonMesh &fbxMesh, aiMesh *mesh);
+
+        void createSkeletonAnimation(std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes, aiScene *scene);
+
+        void createMaterials(std::vector<aiMaterial *> &copyMaterial, aiScene *scene);
+
+        bool generateMeshFromPureSkeleton(SoulScene &soulScene, std::string const &rootBoneName);
+
+        // checks all material textures of a given type and loads the textures if they're not loaded yet.
+        // the required info is returned as a Texture struct.
+        std::vector<Texture> loadMaterialTextures(aiMaterial *mat, aiTextureType type, std::string typeName);
+
+        unsigned char *TextureFromFile(const char *path, const std::string &directory, bool gamma = false);
+
+    public:
+        Importer importer;
+        bool m_hasAnimation{false};
+    };
+}  // namespace SoulIK
+
+static void ____static____() {
 }
 
-static void ____static____(){
-}
-
-static void traversalAllNodes(aiNode* node, std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames){
+static void traversalAllNodes(aiNode *node, std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames) {
     if (node) {
         nodes.emplace_back(node);
         nodeNames.emplace_back(node->mName.data);
@@ -73,8 +94,7 @@ static void traversalAllNodes(aiNode* node, std::vector<aiNode*>& nodes, std::ve
     }
 }
 
-
-static inline int32_t getJointIdByName(std::string& name, const std::vector<std::string>& jointNames) {
+static inline int32_t getJointIdByName(std::string &name, const std::vector<std::string> &jointNames) {
     auto pos = std::find(jointNames.begin(), jointNames.end(), name);
     if (pos != jointNames.end()) {
         return static_cast<uint32_t>(pos - jointNames.begin());
@@ -82,9 +102,9 @@ static inline int32_t getJointIdByName(std::string& name, const std::vector<std:
         return -1;
     }
 }
-static inline int32_t getJointIdFromSkeleton(std::string& name, SoulSkeleton& skeleton) {
 
-    auto pos = std::find_if(skeleton.joints.begin(), skeleton.joints.end(), [&name](const auto& v) {
+static inline int32_t getJointIdFromSkeleton(std::string &name, SoulSkeleton &skeleton) {
+    auto pos = std::find_if(skeleton.joints.begin(), skeleton.joints.end(), [&name](const auto &v) {
         return v.name == name;
     });
 
@@ -96,13 +116,13 @@ static inline int32_t getJointIdFromSkeleton(std::string& name, SoulSkeleton& sk
 }
 
 // search parent.name or parent.parent.name
-static int32_t getJointIdByNode(aiNode* parentNode, const std::vector<std::string>& jointNames) {
+static int32_t getJointIdByNode(aiNode *parentNode, const std::vector<std::string> &jointNames) {
     if (parentNode) {
         std::string name = parentNode->mName.data;
         auto parentPos = std::find(jointNames.begin(), jointNames.end(), name);
 
         if (parentPos != jointNames.end()) {
-            return  static_cast<uint32_t>(parentPos - jointNames.begin());
+            return static_cast<uint32_t>(parentPos - jointNames.begin());
         } else {
             return getJointIdByNode(parentNode->mParent, jointNames);
         }
@@ -111,7 +131,8 @@ static int32_t getJointIdByNode(aiNode* parentNode, const std::vector<std::strin
     }
 }
 
-static aiNode* getNodeByName(std::string name, const std::vector<aiNode*>& nodes, std::vector<std::string> &nodeNames) {
+static aiNode *
+getNodeByName(std::string name, const std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames) {
     auto pos = std::find(nodeNames.begin(), nodeNames.end(), name);
     if (pos != nodeNames.end()) {
         return nodes[pos - nodeNames.begin()];
@@ -120,11 +141,11 @@ static aiNode* getNodeByName(std::string name, const std::vector<aiNode*>& nodes
     }
 }
 
-static void ____FBXRW____(){
+static void ____FBXRW____() {
 }
 
 FBXRW::FBXRW() {
-    //pimpl = std::make_shared<FBXRWImpl>();
+    // pimpl = std::make_shared<FBXRWImpl>();
 };
 
 bool FBXRW::hasAnimation() {
@@ -134,9 +155,9 @@ bool FBXRW::hasAnimation() {
 void FBXRW::printScene() {
 }
 
-static void ____read____(){}
+static void ____read____() {}
 
-void FBXRW::readPureSkeletonWithDefualtMesh(std::string inPath, std::string const& rootBoneName, float scale) {
+void FBXRW::readPureSkeletonWithDefualtMesh(std::string inPath, std::string const &rootBoneName, float scale) {
     readSkeletonMesh(inPath, scale);
 
     bool ret = pimpl->generateMeshFromPureSkeleton(*m_soulScene, rootBoneName);
@@ -153,24 +174,22 @@ void FBXRW::readSkeletonMesh(std::string inPath, float scale) {
 
     // read
     pimpl = std::make_shared<FBXRWImpl>();
-    Importer& importer = pimpl->importer;
-    
+    Importer &importer = pimpl->importer;
+
     // import as centi-meter by set GlobalScale = 100, which is default
     // maya export setting:  centi-meter
     importer.SetPropertyFloat(AI_CONFIG_GLOBAL_SCALE_FACTOR_KEY, 100.0f * scale);
     // prevent 1 joint split to 3 joints prerotation/rotation/joint
     importer.SetPropertyBool(AI_CONFIG_IMPORT_FBX_PRESERVE_PIVOTS, false);
-    
-    //importer.SetPropertyBool(AI_CONFIG_IMPORT_REMOVE_EMPTY_BONES, false);
-    //importer.SetPropertyBool(AI_CONFIG_IMPORT_NO_SKELETON_MESHES, true);
-    //importer.SetPropertyBool(AI_CONFIG_FBX_USE_SKELETON_BONE_CONTAINER, true);
-    
-    const aiScene* scene = importer.ReadFile(m_path, aiProcess_Triangulate 
-                                                   | aiProcess_JoinIdenticalVertices 
-                                                   | aiProcess_CalcTangentSpace 
-                                                   | aiProcess_FlipUVs
-                                                   | aiProcess_GlobalScale
-                                                   /*| aiProcess_PopulateArmatureData*/);
+
+    // importer.SetPropertyBool(AI_CONFIG_IMPORT_REMOVE_EMPTY_BONES, false);
+    // importer.SetPropertyBool(AI_CONFIG_IMPORT_NO_SKELETON_MESHES, true);
+    // importer.SetPropertyBool(AI_CONFIG_FBX_USE_SKELETON_BONE_CONTAINER, true);
+
+    const aiScene *scene = importer.ReadFile(m_path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices |
+                                                     aiProcess_CalcTangentSpace | aiProcess_FlipUVs |
+                                                     aiProcess_GlobalScale
+            /*| aiProcess_PopulateArmatureData*/);
     // scene is part of importer, so no need free
 
     if (!scene || !scene->mRootNode) {
@@ -240,20 +259,25 @@ void FBXRW::readSkeletonMesh(std::string inPath, float scale) {
                 }
             }
         }*/
+        auto newMaterial = new aiMaterial;
+        aiMaterial::CopyPropertyList(newMaterial, material);
+        m_soulScene->copyMaterials.push_back(newMaterial);
         materialNames.emplace_back(material->GetName().data);
     }
 
     // record nodes
-    std::vector<aiNode*> nodes;
+    std::vector<aiNode *> nodes;
     std::vector<std::string> nodeNames;
     traversalAllNodes(scene->mRootNode, nodes, nodeNames);
 
+    // retrieve the directory path of the filepath
+    pimpl->directory = inPath.substr(0, inPath.find_last_of('/'));
     // scene meta
     pimpl->processMetaData(m_soulScene->metaData, scene->mMetaData);
-    
-    // process mesh nodes
-    pimpl->processNode(scene->mRootNode, scene, *m_soulScene, nullptr, materialNames, nodes, nodeNames, m_soulScene->skmeshes);
 
+    // process mesh nodes
+    pimpl->processNode(scene->mRootNode, scene, *m_soulScene, nullptr, materialNames, nodes, nodeNames,
+                       m_soulScene->skmeshes);
 
     // for (auto& name : nodeNames) {
     //     printf("name:%s\n", name.c_str());
@@ -261,13 +285,12 @@ void FBXRW::readSkeletonMesh(std::string inPath, float scale) {
     printf("process done\n");
 }
 
-void FBXRWImpl::processNode(aiNode *node, const aiScene* scene,  SoulScene& fbxScene,
-                        SoulNode* parentSoulNode,
-                        std::vector<std::string>& materialNames, 
-                        std::vector<aiNode*>& nodes, 
-                        std::vector<std::string>& nodeNames, 
-                        std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes) {
-
+void FBXRWImpl::processNode(aiNode *node, const aiScene *scene, SoulScene &fbxScene,
+                            SoulNode *parentSoulNode,
+                            std::vector<std::string> &materialNames,
+                            std::vector<aiNode *> &nodes,
+                            std::vector<std::string> &nodeNames,
+                            std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes) {
     auto curNode = std::make_shared<SoulNode>();
     curNode->name = node->mName.data;
 
@@ -278,15 +301,14 @@ void FBXRWImpl::processNode(aiNode *node, const aiScene* scene,  SoulScene& fbxS
     } else {
         parentSoulNode->children.push_back(curNode);
     }
-    const auto& mat = node->mTransformation;
+    const auto &mat = node->mTransformation;
     // assimp row major, glm column major
     curNode->transform = glm::transpose(glm::mat4(
-        mat[0][0], mat[0][1], mat[0][2], mat[0][3],
-        mat[1][0], mat[1][1], mat[1][2], mat[1][3],
-        mat[2][0], mat[2][1], mat[2][2], mat[2][3],
-        mat[3][0], mat[3][1], mat[3][2], mat[3][3]
-    ));
-    
+            mat[0][0], mat[0][1], mat[0][2], mat[0][3],
+            mat[1][0], mat[1][1], mat[1][2], mat[1][3],
+            mat[2][0], mat[2][1], mat[2][2], mat[2][3],
+            mat[3][0], mat[3][1], mat[3][2], mat[3][3]));
+
     // metadata
     if (node->mMetaData != nullptr) {
         // printf("*** meta of %s\n", curNode->name.c_str());
@@ -297,57 +319,58 @@ void FBXRWImpl::processNode(aiNode *node, const aiScene* scene,  SoulScene& fbxS
         //     printf("Hip\n");
         // }
         processMetaData(curNode->metaData, node->mMetaData);
-        //aiProcess_PopulateArmatureData
+        // aiProcess_PopulateArmatureData
     }
 
     // mesh
-    for(unsigned int i = 0; i < node->mNumMeshes; i++) {
+    for (unsigned int i = 0; i < node->mNumMeshes; i++) {
         aiMesh *mesh = scene->mMeshes[node->mMeshes[i]];
         skeletonMeshes.emplace_back(processMesh(mesh, scene, materialNames, nodes, nodeNames));
-        curNode->meshes.push_back((uint32_t)skeletonMeshes.size() - 1);
+        curNode->meshes.push_back((uint32_t) skeletonMeshes.size() - 1);
     }
-    
+
     // child nodes
-    for(unsigned int i = 0; i < node->mNumChildren; i++) {
-        processNode(node->mChildren[i], scene, fbxScene, curNode.get(), materialNames, nodes, nodeNames, skeletonMeshes);
+    for (unsigned int i = 0; i < node->mNumChildren; i++) {
+        processNode(node->mChildren[i], scene, fbxScene, curNode.get(), materialNames, nodes, nodeNames,
+                    skeletonMeshes);
     }
 }
 
-static bool aimetadataToSoulMetada( aiMetadataType& aitype, void* aimetadata, SoulMetaData& fbxMetaDataItem) {
-    switch(aitype) {
+static bool aimetadataToSoulMetada(aiMetadataType &aitype, void *aimetadata, SoulMetaData &fbxMetaDataItem) {
+    switch (aitype) {
         case AI_BOOL: {
             fbxMetaDataItem.type = SoulMetadataType::BOOL;
-            fbxMetaDataItem.value.boolValue = *static_cast<bool*>(aimetadata);
+            fbxMetaDataItem.value.boolValue = *static_cast<bool *>(aimetadata);
             break;
         }
         case AI_INT32: {
             fbxMetaDataItem.type = SoulMetadataType::INT32;
-            fbxMetaDataItem.value.int32Value = *static_cast<int32_t*>(aimetadata);
+            fbxMetaDataItem.value.int32Value = *static_cast<int32_t *>(aimetadata);
             break;
         }
         case AI_UINT64: {
             fbxMetaDataItem.type = SoulMetadataType::UINT64;
-            fbxMetaDataItem.value.uint64Value = *static_cast<uint64_t*>(aimetadata);
+            fbxMetaDataItem.value.uint64Value = *static_cast<uint64_t *>(aimetadata);
             break;
         }
         case AI_FLOAT: {
             fbxMetaDataItem.type = SoulMetadataType::FLOAT;
-            fbxMetaDataItem.value.floatValue = *static_cast<float*>(aimetadata);
+            fbxMetaDataItem.value.floatValue = *static_cast<float *>(aimetadata);
             break;
         }
         case AI_DOUBLE: {
             fbxMetaDataItem.type = SoulMetadataType::DOUBLE;
-            fbxMetaDataItem.value.doubleValue = *static_cast<double*>(aimetadata);
+            fbxMetaDataItem.value.doubleValue = *static_cast<double *>(aimetadata);
             break;
         }
         case AI_AISTRING: {
             fbxMetaDataItem.type = SoulMetadataType::STRING;
-            fbxMetaDataItem.value.stringValue = (*static_cast<aiString*>(aimetadata)).data;
+            fbxMetaDataItem.value.stringValue = (*static_cast<aiString *>(aimetadata)).data;
             break;
         }
         case AI_AIVECTOR3D: {
             fbxMetaDataItem.type = SoulMetadataType::VEC3;
-            aiVector3D& v = *static_cast<aiVector3D*>(aimetadata);
+            aiVector3D &v = *static_cast<aiVector3D *>(aimetadata);
             fbxMetaDataItem.value.vec3Value = glm::vec3(v.x, v.y, v.z);
             break;
         }
@@ -357,12 +380,12 @@ static bool aimetadataToSoulMetada( aiMetadataType& aitype, void* aimetadata, So
         }
         case AI_INT64: {
             fbxMetaDataItem.type = SoulMetadataType::INT64;
-            fbxMetaDataItem.value.int64Value = *static_cast<int64_t*>(aimetadata);
+            fbxMetaDataItem.value.int64Value = *static_cast<int64_t *>(aimetadata);
             break;
         }
         case AI_UINT32: {
             fbxMetaDataItem.type = SoulMetadataType::UINT32;
-            fbxMetaDataItem.value.uint32Value = *static_cast<uint32_t*>(aimetadata);
+            fbxMetaDataItem.value.uint32Value = *static_cast<uint32_t *>(aimetadata);
             break;
         }
         case AI_META_MAX: {
@@ -372,24 +395,23 @@ static bool aimetadataToSoulMetada( aiMetadataType& aitype, void* aimetadata, So
     return true;
 }
 
-void FBXRWImpl::processMetaData(std::vector<SoulMetaData>& fbxMetadata, aiMetadata* aimetaData) {
-
+void FBXRWImpl::processMetaData(std::vector<SoulMetaData> &fbxMetadata, aiMetadata *aimetaData) {
     if (aimetaData == nullptr) {
         return;
     }
     fbxMetadata.resize(aimetaData->mNumProperties);
 
-    for(uint32_t i = 0; i < aimetaData->mNumProperties; i++) {
+    for (uint32_t i = 0; i < aimetaData->mNumProperties; i++) {
         aiString key = aimetaData->mKeys[i];
         aiMetadataType aitype = aimetaData->mValues[i].mType;
-        void* aimetadataBuf = aimetaData->mValues[i].mData;
-        auto& fbxMetaDataItem = fbxMetadata[i];
+        void *aimetadataBuf = aimetaData->mValues[i].mData;
+        auto &fbxMetaDataItem = fbxMetadata[i];
 
         fbxMetaDataItem.key = key.data;
-        //printf("meta key:%s\n", fbxMetaDataItem.key.c_str());
+        // printf("meta key:%s\n", fbxMetaDataItem.key.c_str());
         if (aitype == AI_AIMETADATA) {
             fbxMetaDataItem.type = SoulMetadataType::METADATA;
-            aiMetadata* v = static_cast<aiMetadata*>(aimetadataBuf);
+            aiMetadata *v = static_cast<aiMetadata *>(aimetadataBuf);
             processMetaData(fbxMetaDataItem.value.metadataValue, v);
         } else {
             aimetadataToSoulMetada(aitype, aimetadataBuf, fbxMetaDataItem);
@@ -397,45 +419,50 @@ void FBXRWImpl::processMetaData(std::vector<SoulMetaData>& fbxMetadata, aiMetada
     }
 }
 
-std::shared_ptr<SoulSkeletonMesh> FBXRWImpl::processMesh(aiMesh* mesh, const aiScene* scene, 
-                                                    std::vector<std::string>& materialNames, 
-                                                    std::vector<aiNode*>& nodes, 
-                                                    std::vector<std::string>& nodeNames) {
+std::shared_ptr<SoulSkeletonMesh> FBXRWImpl::processMesh(aiMesh *mesh, const aiScene *scene,
+                                                         std::vector<std::string> &materialNames,
+                                                         std::vector<aiNode *> &nodes,
+                                                         std::vector<std::string> &nodeNames) {
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec3> normals;
     std::vector<glm::vec3> tangents;
     std::vector<glm::vec2> uvs;
 
     std::vector<uint32_t> indices;
-    //vector<Texture> textures;
+    std::vector<Texture> textures;
 
-    //vertex info
+    // vertex info
     uint32_t vertexCount = mesh->mNumVertices;
     vertices.resize(vertexCount);
     normals.resize(vertexCount);
     tangents.resize(vertexCount);
     uvs.resize(vertexCount, glm::vec2(0.0f, 0.0f));
-    for(uint32_t i = 0; i < vertexCount; i++) {
-        glm::vec3& vertex = vertices[i];
-        glm::vec3& normal = normals[i];
-        glm::vec3& tangent = tangents[i];
-        glm::vec2& uv = uvs[i];
+    for (uint32_t i = 0; i < vertexCount; i++) {
+        glm::vec3 &vertex = vertices[i];
+        glm::vec3 &normal = normals[i];
+        glm::vec3 &tangent = tangents[i];
+        glm::vec2 &uv = uvs[i];
 
-        // position, normal, tangent, uv 
-        vertex.x = mesh->mVertices[i].x; vertex.y = mesh->mVertices[i].y; vertex.z = mesh->mVertices[i].z;
+        // position, normal, tangent, uv
+        vertex.x = mesh->mVertices[i].x;
+        vertex.y = mesh->mVertices[i].y;
+        vertex.z = mesh->mVertices[i].z;
         // if (i == 0) {
         //     printf("position: %s, v.y:%f\n", mesh->mName.data, vertex.y);
         // }
-        if(mesh->HasNormals()){
-            normal.x = mesh->mNormals[i].x; normal.y = mesh->mNormals[i].y; normal.z = mesh->mNormals[i].z;
+        if (mesh->HasNormals()) {
+            normal.x = mesh->mNormals[i].x;
+            normal.y = mesh->mNormals[i].y;
+            normal.z = mesh->mNormals[i].z;
         }
-        if(mesh->HasTangentsAndBitangents()){
+        if (mesh->HasTangentsAndBitangents()) {
             tangent.x = mesh->mTangents[i].x;
             tangent.y = mesh->mTangents[i].y;
             tangent.z = mesh->mTangents[i].z;
         }
-        if(mesh->mTextureCoords[0]) { // if exist uv
-            uv.x = mesh->mTextureCoords[0][i].x; uv.y = mesh->mTextureCoords[0][i].y;
+        if (mesh->mTextureCoords[0]) {  // if exist uv
+            uv.x = mesh->mTextureCoords[0][i].x;
+            uv.y = mesh->mTextureCoords[0][i].y;
         }
 
         // vertices.emplace_back(std::move(vertex));
@@ -447,10 +474,10 @@ std::shared_ptr<SoulSkeletonMesh> FBXRWImpl::processMesh(aiMesh* mesh, const aiS
     // index info
     uint32_t faceCount = mesh->mNumFaces;
     indices.resize(faceCount * 3);
-    for(uint32_t i = 0; i < faceCount; i++) {
-        aiFace& face = mesh->mFaces[i];
+    for (uint32_t i = 0; i < faceCount; i++) {
+        aiFace &face = mesh->mFaces[i];
         int startIndex = i * 3;
-        for(unsigned int j = 0; j < face.mNumIndices; j++) {
+        for (unsigned int j = 0; j < face.mNumIndices; j++) {
             indices[startIndex + j] = face.mIndices[j];
         }
     }
@@ -462,40 +489,60 @@ std::shared_ptr<SoulSkeletonMesh> FBXRWImpl::processMesh(aiMesh* mesh, const aiS
     // }
 
     std::shared_ptr<SoulSkeletonMesh> pSoulMesh = std::make_shared<SoulSkeletonMesh>();
-    SoulSkeletonMesh& fbxMesh = *pSoulMesh;
+    SoulSkeletonMesh &fbxMesh = *pSoulMesh;
     fbxMesh.name = std::string(mesh->mName.data) + '_' + materialNames[mesh->mMaterialIndex];
     fbxMesh.vertices = std::move(vertices);
     fbxMesh.normals = std::move(normals);
     fbxMesh.tangents = std::move(tangents);
     fbxMesh.uvs = std::move(uvs);
     fbxMesh.indices = std::move(indices);
-    
-    //calculateNormalArray(fbxMesh.vertices,fbxMesh.indices,fbxMesh.normals);
-    //calculateTangentArray(fbxMesh.vertices,fbxMesh.uvs,fbxMesh.normals,fbxMesh.indices,fbxMesh.tangents);
+
+    // calculateNormalArray(fbxMesh.vertices,fbxMesh.indices,fbxMesh.normals);
+    // calculateTangentArray(fbxMesh.vertices,fbxMesh.uvs,fbxMesh.normals,fbxMesh.indices,fbxMesh.tangents);
 
     // material
-    /*if(mesh->mMaterialIndex >= 0)
-    {
-        aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
-        vector<Texture> diffuseMaps = loadMaterialTextures(material,
-                                            aiTextureType_DIFFUSE, "texture_diffuse");
-        textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
-        vector<Texture> specularMaps = loadMaterialTextures(material,
-                                            aiTextureType_SPECULAR, "texture_specular");
-        textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
-    }*/
-    //auto ans = Mesh(vertices, indices, textures);
+//    aiMaterial *new_material = nullptr;
+//    if (mesh->mMaterialIndex >= 0) {
+//        aiMaterial *material = scene->mMaterials[mesh->mMaterialIndex];
+//        if (material->GetTextureCount(aiTextureType_DIFFUSE) != 0) {
+//            std::vector<Texture> diffuseMaps = loadMaterialTextures(material, aiTextureType_DIFFUSE, "texture_diffuse");
+//            textures.insert(textures.end(), diffuseMaps.begin(), diffuseMaps.end());
+//        }
+//        if (material->GetTextureCount(aiTextureType_SPECULAR) != 0) {
+//            std::vector<Texture> specularMaps = loadMaterialTextures(material, aiTextureType_SPECULAR,
+//                                                                     "texture_specular");
+//            textures.insert(textures.end(), specularMaps.begin(), specularMaps.end());
+//        }
+//        if (material->GetTextureCount(aiTextureType_HEIGHT) != 0) {
+//            std::vector<Texture> normalMaps = loadMaterialTextures(material, aiTextureType_HEIGHT, "texture_normal");
+//            textures.insert(textures.end(), normalMaps.begin(), normalMaps.end());
+//        }
+//        if (material->GetTextureCount(aiTextureType_AMBIENT) != 0) {
+//            std::vector<Texture> heightMaps = loadMaterialTextures(material, aiTextureType_AMBIENT, "texture_height");
+//            textures.insert(textures.end(), heightMaps.begin(), heightMaps.end());
+//        }
+//
+//        new_material = new aiMaterial();
+//        aiMaterial::CopyPropertyList(new_material, scene->mMaterials[mesh->mMaterialIndex]);
+//    }
+
+//    fbxMesh.material = new_material;
+//    fbxMesh.textures = std::move(textures);
+    // auto ans = Mesh(vertices, indices, textures);
     //
 
-    //blendshape
-    // auto aiAnimMeshNums = mesh->mNumAnimMeshes;
-    // auto aiAnimMesh = mesh->mAnimMeshes;
-    // for (int i = 0; i < aiAnimMeshNums; i++) {
-    //     processBlendshape(aiAnimMesh[i], fbxMesh);
-    // }
+    // blendshape
+    //  auto aiAnimMeshNums = mesh->mNumAnimMeshes;
+    //  auto aiAnimMesh = mesh->mAnimMeshes;
+    //  for (int i = 0; i < aiAnimMeshNums; i++) {
+    //      processBlendshape(aiAnimMesh[i], fbxMesh);
+    //  }
 
     // material
-    fbxMesh.materialIndex = 0;
+    if (mesh->mMaterialIndex >= 0)
+        fbxMesh.materialIndex = mesh->mMaterialIndex;
+    else
+        fbxMesh.materialIndex = 0;
 
     // skeleton and skin
     processSkeleton(mesh, fbxMesh, nodes, nodeNames);
@@ -506,25 +553,23 @@ std::shared_ptr<SoulSkeletonMesh> FBXRWImpl::processMesh(aiMesh* mesh, const aiS
     return pSoulMesh;
 }
 
-void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh, 
-                            std::vector<aiNode*>& nodes, std::vector<std::string>& nodeNames) {
-
+void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
+                                std::vector<aiNode *> &nodes, std::vector<std::string> &nodeNames) {
     std::vector<std::string> jointNames;
-    
+
     // build skeleton
     // skeleton name and matrix
     for (uint32_t i = 0; i < mesh->mNumBones; i++) {
         SoulJoint joint;
 
         joint.name = std::string(mesh->mBones[i]->mName.data);
-        const auto& mat = mesh->mBones[i]->mOffsetMatrix;
+        const auto &mat = mesh->mBones[i]->mOffsetMatrix;
         // assimp row major, glm column major
         joint.inverseBindposeMatrix = glm::transpose(glm::mat4(
-            mat[0][0], mat[0][1], mat[0][2], mat[0][3],
-            mat[1][0], mat[1][1], mat[1][2], mat[1][3],
-            mat[2][0], mat[2][1], mat[2][2], mat[2][3],
-            mat[3][0], mat[3][1], mat[3][2], mat[3][3]
-        ));
+                mat[0][0], mat[0][1], mat[0][2], mat[0][3],
+                mat[1][0], mat[1][1], mat[1][2], mat[1][3],
+                mat[2][0], mat[2][1], mat[2][2], mat[2][3],
+                mat[3][0], mat[3][1], mat[3][2], mat[3][3]));
         jointNames.emplace_back(joint.name);
         fbxMesh.skeleton.joints.emplace_back(joint);
     }
@@ -532,7 +577,7 @@ void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
 
     // skin
     // weight on joint to weight on vertex
-    uint32_t vertexCount = (uint32_t)fbxMesh.vertices.size();
+    uint32_t vertexCount = (uint32_t) fbxMesh.vertices.size();
     fbxMesh.weightCounts.resize(vertexCount);
     fbxMesh.weights.resize(vertexCount);
     fbxMesh.jointIds.resize(vertexCount);
@@ -544,9 +589,9 @@ void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
             uint32_t vertexID = mesh->mBones[i]->mWeights[j].mVertexId;
             float weight = mesh->mBones[i]->mWeights[j].mWeight;
 
-            auto& weightCounts = fbxMesh.weightCounts[vertexID];
-            auto& weights = fbxMesh.weights[vertexID];
-            auto& jointIds = fbxMesh.jointIds[vertexID];
+            auto &weightCounts = fbxMesh.weightCounts[vertexID];
+            auto &weights = fbxMesh.weights[vertexID];
+            auto &jointIds = fbxMesh.jointIds[vertexID];
             if (weightCounts < 4) {
                 jointIds[weightCounts] = jointId;
                 weights[weightCounts] = weight;
@@ -566,9 +611,9 @@ void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
             }
         }
     }
-    
+
     // normalize skin
-    for (auto& weights : fbxMesh.weights) {
+    for (auto &weights: fbxMesh.weights) {
         float sum = weights.x + weights.y + weights.z + weights.w;
         if (sum > KINDA_SMALL_NUMBER) {
             weights /= sum;
@@ -576,17 +621,16 @@ void FBXRWImpl::processSkeleton(aiMesh *mesh, SoulSkeletonMesh &fbxMesh,
     }
 }
 
-
 /// find parent by name relation:  parentName_childName
-void FBXRWImpl::buildSkeletonTree(std::vector<SoulJoint>& joints, 
-                              std::vector<std::string>& jointNames,
-                              const std::vector<aiNode*>& nodes,
-                              std::vector<std::string>& nodeNames) {
+void FBXRWImpl::buildSkeletonTree(std::vector<SoulJoint> &joints,
+                                  std::vector<std::string> &jointNames,
+                                  const std::vector<aiNode *> &nodes,
+                                  std::vector<std::string> &nodeNames) {
     // sort joints by parent
     sortJointsByNodeTree(joints, jointNames, nodes, nodeNames);
 
     // get parent
-    for (auto& joint : joints){
+    for (auto &joint: joints) {
         auto node = getNodeByName(joint.name, nodes, nodeNames);
         if (node != nullptr) {
             auto parentNode = node->mParent;
@@ -597,20 +641,19 @@ void FBXRWImpl::buildSkeletonTree(std::vector<SoulJoint>& joints,
 }
 
 // use node parent relation to sort skeleton
-void FBXRWImpl::sortJointsByNodeTree(std::vector<SoulJoint> &joints, 
-                                 std::vector<std::string> &jointNames, 
-                                 const std::vector<aiNode*>& nodes, 
-                                 std::vector<std::string> &nodeNames) {
+void FBXRWImpl::sortJointsByNodeTree(std::vector<SoulJoint> &joints,
+                                     std::vector<std::string> &jointNames,
+                                     const std::vector<aiNode *> &nodes,
+                                     std::vector<std::string> &nodeNames) {
     auto count = joints.size();
     for (size_t i = 0; i < count; ++i) {
-
         // find parent
-        aiNode* node = getNodeByName(joints[i].name, nodes, nodeNames);
+        aiNode *node = getNodeByName(joints[i].name, nodes, nodeNames);
         auto parentId = getJointIdByNode(node->mParent, jointNames);
 
         // insert before i
-        auto j  = parentId;
-        if ( j >= i + 1 && j < count ) {
+        auto j = parentId;
+        if (j >= i + 1 && j < count) {
             auto joint = joints[j];
             auto name = jointNames[j];
 
@@ -622,16 +665,15 @@ void FBXRWImpl::sortJointsByNodeTree(std::vector<SoulJoint> &joints,
             joints.insert(joints.begin() + i, joint);
             jointNames.insert(jointNames.begin() + i, name);
 
-            // to previous node 
+            // to previous node
             --i;
         }
     }
 }
 
 // first animation as skeleton animation
-void FBXRWImpl::processSkeletonAnimation(const aiScene* scene, SoulSkeletonMesh &fbxMesh) {
-
-    auto& joints = fbxMesh.skeleton.joints;
+void FBXRWImpl::processSkeletonAnimation(const aiScene *scene, SoulSkeletonMesh &fbxMesh) {
+    auto &joints = fbxMesh.skeleton.joints;
     if (scene->mNumAnimations == 0 || joints.size() == 0) {
         return;
     }
@@ -639,45 +681,44 @@ void FBXRWImpl::processSkeletonAnimation(const aiScene* scene, SoulSkeletonMesh 
 
     std::unordered_map<std::string, uint32_t> jointNameToId;
     for (int i = 0; i < fbxMesh.skeleton.joints.size(); i++) {
-        const SoulJoint& joint = fbxMesh.skeleton.joints[i];
+        const SoulJoint &joint = fbxMesh.skeleton.joints[i];
         jointNameToId[joint.name] = i;
     }
 
-    aiAnimation* pAnimation = scene->mAnimations[0];
+    aiAnimation *pAnimation = scene->mAnimations[0];
     fbxMesh.animation.name = pAnimation->mName.data;
     fbxMesh.animation.duration = pAnimation->mDuration;
     fbxMesh.animation.ticksPerSecond = pAnimation->mTicksPerSecond;
     for (uint32_t k = 0; k < pAnimation->mNumChannels; k++) {
-        
-        const aiNodeAnim* pNodeAnim = pAnimation->mChannels[k];
+        const aiNodeAnim *pNodeAnim = pAnimation->mChannels[k];
         std::string channelName = pNodeAnim->mNodeName.data;
 
         if (auto it = jointNameToId.find(channelName); it != jointNameToId.end()) {
             auto jointId = (*it).second;
             fbxMesh.animation.channels.emplace_back();
-            SoulAniChannel& fbxChannel = fbxMesh.animation.channels.back();
+            SoulAniChannel &fbxChannel = fbxMesh.animation.channels.back();
 
             fbxChannel.jointId = jointId;
             // scaling key
             fbxChannel.ScalingKeys.resize(pNodeAnim->mNumScalingKeys);
             for (uint32_t i = 0; i < pNodeAnim->mNumScalingKeys; i++) {
-                const aiVector3D& tmp = pNodeAnim->mScalingKeys[i].mValue;
+                const aiVector3D &tmp = pNodeAnim->mScalingKeys[i].mValue;
                 fbxChannel.ScalingKeys[i].time = pNodeAnim->mScalingKeys[i].mTime;
-                fbxChannel.ScalingKeys[i].value = glm::vec3{ tmp.x,tmp.y,tmp.z };
+                fbxChannel.ScalingKeys[i].value = glm::vec3{tmp.x, tmp.y, tmp.z};
             }
             // postion key
             fbxChannel.PositionKeys.resize(pNodeAnim->mNumPositionKeys);
             for (uint32_t i = 0; i < pNodeAnim->mNumPositionKeys; i++) {
-                const aiVector3D& tmp = pNodeAnim->mPositionKeys[i].mValue;
+                const aiVector3D &tmp = pNodeAnim->mPositionKeys[i].mValue;
                 fbxChannel.PositionKeys[i].time = pNodeAnim->mPositionKeys[i].mTime;
-                fbxChannel.PositionKeys[i].value = glm::vec3{ tmp.x,tmp.y,tmp.z };
+                fbxChannel.PositionKeys[i].value = glm::vec3{tmp.x, tmp.y, tmp.z};
             }
             // rotation key
             fbxChannel.RotationKeys.resize(pNodeAnim->mNumRotationKeys);
             for (uint32_t i = 0; i < pNodeAnim->mNumRotationKeys; i++) {
-                const aiQuaternion& tmp = pNodeAnim->mRotationKeys[i].mValue;
+                const aiQuaternion &tmp = pNodeAnim->mRotationKeys[i].mValue;
                 fbxChannel.RotationKeys[i].time = pNodeAnim->mRotationKeys[i].mTime;
-                fbxChannel.RotationKeys[i].value = glm::quat{ tmp.w,tmp.x,tmp.y,tmp.z };
+                fbxChannel.RotationKeys[i].value = glm::quat{tmp.w, tmp.x, tmp.y, tmp.z};
             }
         } else {
             printf("cannot find joints:%s\n", channelName.c_str());
@@ -685,9 +726,8 @@ void FBXRWImpl::processSkeletonAnimation(const aiScene* scene, SoulSkeletonMesh 
     }
 }
 
-static void processJointNode(SoulSkeleton& sk, SoulNode* node, SoulTransform const& ParentGlobalTransform, int depth) {
+static void processJointNode(SoulSkeleton &sk, SoulNode *node, SoulTransform const &ParentGlobalTransform, int depth) {
     if (node != nullptr) {
-
         SoulJoint joint;
 
         // name
@@ -695,7 +735,7 @@ static void processJointNode(SoulSkeleton& sk, SoulNode* node, SoulTransform con
 
         // ibm
         SoulTransform local = SoulTransform(node->transform);
-        SoulTransform global =  ParentGlobalTransform * local;
+        SoulTransform global = ParentGlobalTransform * local;
         joint.inverseBindposeMatrix = glm::inverse(global.toMatrix());
 
         // parent
@@ -707,18 +747,17 @@ static void processJointNode(SoulSkeleton& sk, SoulNode* node, SoulTransform con
         sk.joints.push_back(joint);
 
         // child
-        for (auto& child:  node->children) {
+        for (auto &child: node->children) {
             processJointNode(sk, child.get(), global, depth + 1);
         }
     }
 }
 
-bool FBXRWImpl::generateMeshFromPureSkeleton(SoulScene& soulScene, std::string const& rootBoneName) {
+bool FBXRWImpl::generateMeshFromPureSkeleton(SoulScene &soulScene, std::string const &rootBoneName) {
+    const aiScene *aiscene = importer.GetScene();
 
-    const aiScene* aiscene = importer.GetScene();
-    
     soulScene.skmeshes.insert(soulScene.skmeshes.begin(), std::make_shared<SoulSkeletonMesh>());
-    SoulSkeletonMesh& mesh = *soulScene.skmeshes[0];
+    SoulSkeletonMesh &mesh = *soulScene.skmeshes[0];
 
     // geom
     mesh.vertices.push_back(glm::vec3(-0.5, 0.0, 0.0));
@@ -755,7 +794,7 @@ bool FBXRWImpl::generateMeshFromPureSkeleton(SoulScene& soulScene, std::string c
 
     // skeleton
     mesh.skeleton;
-    SoulNode* jointRoot = soulScene.findNodeByName(rootBoneName).get();
+    SoulNode *jointRoot = soulScene.findNodeByName(rootBoneName).get();
     processJointNode(mesh.skeleton, jointRoot, SoulTransform::identity, 0);
 
     // skeleton animation
@@ -764,11 +803,10 @@ bool FBXRWImpl::generateMeshFromPureSkeleton(SoulScene& soulScene, std::string c
     return true;
 }
 
-static void ____write____(){}
+static void ____write____() {}
 
-void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate, const SoulMetaData* customFrameRate, float scale) {
-
-
+void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData *frameRate, const SoulMetaData *customFrameRate,
+                              float scale) {
     std::cout << "start write to file:" << outPath << std::endl;
 
     Exporter exporter;
@@ -782,7 +820,7 @@ void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate
 
     // build scene
     std::unique_ptr<aiScene> uscene = std::unique_ptr<aiScene>(new aiScene);
-    aiScene* scene = uscene.get();
+    aiScene *scene = uscene.get();
     scene->mFlags = 8;
 
     // build node tree
@@ -810,11 +848,15 @@ void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate
 
     //     // todo
     //     // transform
-    //     //child.mTransformation = ;        
+    //     //child.mTransformation = ;
     // }
 
     // build material
-    pimpl->createDefaultMaterial(scene);
+    if (m_soulScene->copyMaterials.size() == 0) {
+        pimpl->createDefaultMaterial(scene);
+    } else {
+        pimpl->createMaterials(m_soulScene->copyMaterials, scene);
+    }
 
     pimpl->createNodes(scene, *m_soulScene);
 
@@ -824,11 +866,11 @@ void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate
     // meta
     m_soulScene->removeMetaByKey("FrameRate");
     m_soulScene->removeMetaByKey("CustomFrameRate");
-    //frameRate != nullptr && m_soulScene->metaData.push_back(*frameRate);
+    // frameRate != nullptr && m_soulScene->metaData.push_back(*frameRate);
     frameRate != nullptr ? m_soulScene->metaData.push_back(*frameRate) : void();
     customFrameRate != nullptr ? m_soulScene->metaData.push_back(*customFrameRate) : void();
 
-    if (const SoulMetaData* pmeta = m_soulScene->getMetaByKey("FrameRate")) {
+    if (const SoulMetaData *pmeta = m_soulScene->getMetaByKey("FrameRate")) {
         scene->mMetaData = new aiMetadata;
         scene->mMetaData->mNumProperties = 2;
         scene->mMetaData->mKeys = new aiString[2];
@@ -836,29 +878,29 @@ void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate
 
         scene->mMetaData->mKeys[0] = aiString("TimeMode");
         scene->mMetaData->mValues[0].mType = AI_INT32;
-        scene->mMetaData->mValues[0].mData = (void*)new int32_t;
-        *(int32_t*)scene->mMetaData->mValues[0].mData =  pmeta->value.int32Value;
+        scene->mMetaData->mValues[0].mData = (void *) new int32_t;
+        *(int32_t *) scene->mMetaData->mValues[0].mData = pmeta->value.int32Value;
 
-        const SoulMetaData* pCustomFrameRate = m_soulScene->getMetaByKey("CustomFrameRate");
+        const SoulMetaData *pCustomFrameRate = m_soulScene->getMetaByKey("CustomFrameRate");
         double CustomFrameRate = pCustomFrameRate != nullptr ? pCustomFrameRate->value.doubleValue : -1;
         scene->mMetaData->mKeys[1] = aiString("CustomFrameRate");
         scene->mMetaData->mValues[1].mType = AI_DOUBLE;
-        scene->mMetaData->mValues[1].mData = (void*)new double;
-        *(double*)scene->mMetaData->mValues[1].mData =  CustomFrameRate;
+        scene->mMetaData->mValues[1].mData = (void *) new double;
+        *(double *) scene->mMetaData->mValues[1].mData = CustomFrameRate;
     }
-    //if(m_soulScene->skmeshes.size() != 0) {
-        // auto& sk = *m_soulScene->skmeshes[0];
-        // auto& ani = sk.animation;
-        // scene->mRootNode->mMetaData = new aiMetadata;
-        // scene->mRootNode->mMetaData->mNumProperties = 1;
-        // scene->mRootNode->mMetaData->mKeys = new aiString;
-        // scene->mRootNode->mMetaData->mKeys[0] = aiString("FrameRate");
-        // scene->mRootNode->mMetaData->mValues = new aiMetadataEntry;
-        // scene->mRootNode->mMetaData->mValues->mType = AI_INT32;
-        // scene->mRootNode->mMetaData->mValues->mData = (void*)new int32_t;
-        // *(int32_t*)scene->mRootNode->mMetaData->mValues->mData = 6;
+    // if(m_soulScene->skmeshes.size() != 0) {
+    //  auto& sk = *m_soulScene->skmeshes[0];
+    //  auto& ani = sk.animation;
+    //  scene->mRootNode->mMetaData = new aiMetadata;
+    //  scene->mRootNode->mMetaData->mNumProperties = 1;
+    //  scene->mRootNode->mMetaData->mKeys = new aiString;
+    //  scene->mRootNode->mMetaData->mKeys[0] = aiString("FrameRate");
+    //  scene->mRootNode->mMetaData->mValues = new aiMetadataEntry;
+    //  scene->mRootNode->mMetaData->mValues->mType = AI_INT32;
+    //  scene->mRootNode->mMetaData->mValues->mData = (void*)new int32_t;
+    //  *(int32_t*)scene->mRootNode->mMetaData->mValues->mData = 6;
     //}
-    
+
     // export as meter by set GlobalScale = 1/100, which is default
     aiReturn ret = exporter.Export(scene, "fbx", outPath);
     if (ret != AI_SUCCESS) {
@@ -869,18 +911,28 @@ void FBXRW::writeSkeletonMesh(std::string outPath, const SoulMetaData* frameRate
     printf("write mesh done\n");
 }
 
-void FBXRWImpl::createDefaultMaterial(aiScene* scene) {
+void FBXRWImpl::createMaterials(std::vector<aiMaterial *> &copyMaterial, aiScene *scene) {
+    scene->mMaterials = new aiMaterial *[copyMaterial.size()];
+    scene->mNumMaterials = (uint32_t) copyMaterial.size();
+    for (int i = 0; i < copyMaterial.size(); i++) {
+        scene->mMaterials[i] = new aiMaterial;
+        aiMaterial::CopyPropertyList(scene->mMaterials[i], copyMaterial[i]);
+    }
+    printf("create materials done\n");
+}
+
+void FBXRWImpl::createDefaultMaterial(aiScene *scene) {
     scene->mNumMaterials = 1;
-    scene->mMaterials = new aiMaterial* [1];
+    scene->mMaterials = new aiMaterial *[1];
     scene->mMaterials[0] = new aiMaterial;
-    aiMaterial& mat = *scene->mMaterials[0];
+    aiMaterial &mat = *scene->mMaterials[0];
     mat.mNumProperties = 2;
-    mat.mProperties = new aiMaterialProperty* [2];
+    mat.mProperties = new aiMaterialProperty *[2];
     mat.mProperties[0] = new aiMaterialProperty;
     mat.mProperties[1] = new aiMaterialProperty;
-    auto& pname = *mat.mProperties[0];
-    auto& pdiffuse = *mat.mProperties[1];
-    
+    auto &pname = *mat.mProperties[0];
+    auto &pdiffuse = *mat.mProperties[1];
+
     // mat name
     pname.mKey = aiString("?mat.name");
     pname.mSemantic = 0;
@@ -891,7 +943,7 @@ void FBXRWImpl::createDefaultMaterial(aiScene* scene) {
     pname.mType = aiPTI_String;
     pname.mDataLength = sizeof(matName);
     pname.mData = new char[pname.mDataLength];
-    aiString* pdata = (aiString*)pname.mData;
+    aiString *pdata = (aiString *) pname.mData;
     *pdata = matName;
 
     // diffuse
@@ -900,65 +952,64 @@ void FBXRWImpl::createDefaultMaterial(aiScene* scene) {
     pname.mSemantic = 0;
     pname.mIndex = 0;
 
-    //aiColor3D c(0.8, 0.8, 0.8);
+    // aiColor3D c(0.8, 0.8, 0.8);
     aiColor3D c(0.4f, 0.4f, 0.4f);
     pname.mType = aiPTI_Float;
     pname.mDataLength = sizeof(float) * 3;
     pname.mData = new char[pname.mDataLength];
-    float* pdata2 = (float*)pname.mData;
+    float *pdata2 = (float *) pname.mData;
     pdata2[0] = c.r;
     pdata2[1] = c.g;
     pdata2[2] = c.b;
 }
 
-void FBXRWImpl::createNodes(aiScene* scene, SoulScene& fbxScene) {
+void FBXRWImpl::createNodes(aiScene *scene, SoulScene &fbxScene) {
     createNode(fbxScene.rootNode.get(), nullptr, scene, 0);
 }
 
-void FBXRWImpl::createNode(SoulNode* node, aiNode* parentAINode, aiScene* scene, int32_t nodeIndex) {
-    
-    aiNode* curAINode = new aiNode;
+void FBXRWImpl::createNode(SoulNode *node, aiNode *parentAINode, aiScene *scene, int32_t nodeIndex) {
+    aiNode *curAINode = new aiNode;
     curAINode->mName = node->name;
 
     // tree
     curAINode->mParent = parentAINode;
-    if(parentAINode == nullptr) {
+    if (parentAINode == nullptr) {
         scene->mRootNode = curAINode;
     } else {
         parentAINode->mChildren[nodeIndex] = curAINode;
     }
-    curAINode->mNumChildren = (uint32_t)node->children.size();
-    curAINode->mChildren = new aiNode* [curAINode->mNumChildren];
+    curAINode->mNumChildren = (uint32_t) node->children.size();
+    curAINode->mChildren = new aiNode *[curAINode->mNumChildren];
 
     // transform
-    aiMatrix4x4& mat = curAINode->mTransformation;
-    auto& m = node->transform;
+    aiMatrix4x4 &mat = curAINode->mTransformation;
+    auto &m = node->transform;
     // assimp row major, glm column major
     mat = aiMatrix4x4(m[0][0], m[1][0], m[2][0], m[3][0],
                       m[0][1], m[1][1], m[2][1], m[3][1],
                       m[0][2], m[1][2], m[2][2], m[3][2],
                       m[0][3], m[1][3], m[2][3], m[3][3]);
-    
+
     // meshes
-    curAINode->mNumMeshes = (uint32_t)node->meshes.size();
+    curAINode->mNumMeshes = (uint32_t) node->meshes.size();
     curAINode->mMeshes = new unsigned int[curAINode->mNumMeshes];
-    for(uint32_t i = 0; i < curAINode->mNumMeshes; i++) {
+    for (uint32_t i = 0; i < curAINode->mNumMeshes; i++) {
         curAINode->mMeshes[i] = node->meshes[i];
     }
 
     // recursive child node
-    for(int i = 0; i < node->children.size(); i++) {
+    for (int i = 0; i < node->children.size(); i++) {
         createNode(node->children[i].get(), curAINode, scene, i);
     }
 }
 
-void FBXRWImpl::createMeshes(std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes, aiScene* scene) {
+void FBXRWImpl::createMeshes(std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes, aiScene *scene) {
     // build meshes
-    scene->mNumMeshes = (uint32_t)skeletonMeshes.size();
-    scene->mMeshes = new aiMesh* [scene->mNumMeshes];
-    for(int i = 0; i < skeletonMeshes.size(); i++) {
-        auto& fbxMesh = *skeletonMeshes[i];
-        aiMesh* mesh = new aiMesh;
+    scene->mNumMeshes = (uint32_t) skeletonMeshes.size();
+    scene->mMeshes = new aiMesh *[scene->mNumMeshes];
+    for (int i = 0; i < skeletonMeshes.size(); i++) {
+        auto &fbxMesh = *skeletonMeshes[i];
+        aiMesh *mesh = new aiMesh;
         scene->mMeshes[i] = mesh;
 
         // mesh
@@ -972,43 +1023,47 @@ void FBXRWImpl::createMeshes(std::vector<std::shared_ptr<SoulSkeletonMesh>>& ske
     createSkeletonAnimation(skeletonMeshes, scene);
 }
 
-
-
-void FBXRWImpl::createMesh(SoulSkeletonMesh& fbxMesh, aiMesh* mesh, aiScene* scene) {
-
+void FBXRWImpl::createMesh(SoulSkeletonMesh &fbxMesh, aiMesh *mesh, aiScene *scene) {
     // global
     mesh->mName = fbxMesh.name;
 
     // geom
     mesh->mPrimitiveTypes = aiPrimitiveType_TRIANGLE;
-    mesh->mNumVertices = (uint32_t)fbxMesh.vertices.size();
+    mesh->mNumVertices = (uint32_t) fbxMesh.vertices.size();
     mesh->mVertices = new aiVector3D[mesh->mNumVertices];
     mesh->mNormals = new aiVector3D[mesh->mNumVertices];
     mesh->mTangents = new aiVector3D[mesh->mNumVertices];
     mesh->mTextureCoords[0] = new aiVector3D[mesh->mNumVertices];
     mesh->mNumUVComponents[0] = 2;
-    for(uint32_t i = 0; i < mesh->mNumVertices; i++) {
-        aiVector3D& vertex = mesh->mVertices[i];
-        aiVector3D& normal = mesh->mNormals[i];
-        aiVector3D& tangent = mesh->mTangents[i];
-        aiVector3D& uv0 = mesh->mTextureCoords[0][i];
+    for (uint32_t i = 0; i < mesh->mNumVertices; i++) {
+        aiVector3D &vertex = mesh->mVertices[i];
+        aiVector3D &normal = mesh->mNormals[i];
+        aiVector3D &tangent = mesh->mTangents[i];
+        aiVector3D &uv0 = mesh->mTextureCoords[0][i];
 
-        glm::vec3& tempv = fbxMesh.vertices[i];
-        glm::vec3& tempn = fbxMesh.normals[i];
-        glm::vec3& tempt = fbxMesh.tangents[i];
-        glm::vec2& tempuv = fbxMesh.uvs[i];
+        glm::vec3 &tempv = fbxMesh.vertices[i];
+        glm::vec3 &tempn = fbxMesh.normals[i];
+        glm::vec3 &tempt = fbxMesh.tangents[i];
+        glm::vec2 &tempuv = fbxMesh.uvs[i];
 
-        vertex.x = tempv.x; vertex.y = tempv.y; vertex.z = tempv.z;
-        normal.x = tempn.x; normal.y = tempn.y; normal.z = tempn.z;
-        tangent.x = tempt.x; tangent.y = tempt.y; tangent.z = tempt.z;
-        uv0.x = tempuv.x; uv0.y = tempuv.y;
+        vertex.x = tempv.x;
+        vertex.y = tempv.y;
+        vertex.z = tempv.z;
+        normal.x = tempn.x;
+        normal.y = tempn.y;
+        normal.z = tempn.z;
+        tangent.x = tempt.x;
+        tangent.y = tempt.y;
+        tangent.z = tempt.z;
+        uv0.x = tempuv.x;
+        uv0.y = tempuv.y;
     }
 
-    uint32_t faceCount = (uint32_t)fbxMesh.indices.size() / 3;
+    uint32_t faceCount = (uint32_t) fbxMesh.indices.size() / 3;
     mesh->mNumFaces = faceCount;
     mesh->mFaces = new aiFace[faceCount];
-    for(uint32_t i = 0; i < faceCount; i++) {
-        aiFace& face = mesh->mFaces[i];
+    for (uint32_t i = 0; i < faceCount; i++) {
+        aiFace &face = mesh->mFaces[i];
         uint32_t startIndex = i * 3;
         face.mNumIndices = 3;
         face.mIndices = new unsigned int[3];
@@ -1019,67 +1074,64 @@ void FBXRWImpl::createMesh(SoulSkeletonMesh& fbxMesh, aiMesh* mesh, aiScene* sce
 
     // material
     mesh->mMaterialIndex = fbxMesh.materialIndex;
-
 }
 
 // create skeleton of mesh will mark world node as joint
-void FBXRWImpl::createSkeleton(SoulSkeletonMesh &fbxMesh, aiMesh* mesh) {
+void FBXRWImpl::createSkeleton(SoulSkeletonMesh &fbxMesh, aiMesh *mesh) {
+    SoulSkeleton &sk = fbxMesh.skeleton;
 
-    SoulSkeleton& sk = fbxMesh.skeleton;
-    
     // build skeleton
-    mesh->mNumBones = (uint32_t)sk.joints.size();
-    mesh->mBones = new aiBone* [mesh->mNumBones];
+    mesh->mNumBones = (uint32_t) sk.joints.size();
+    mesh->mBones = new aiBone *[mesh->mNumBones];
 
     // build bone
-    for(uint32_t i = 0; i < mesh->mNumBones; i++) {
+    for (uint32_t i = 0; i < mesh->mNumBones; i++) {
         mesh->mBones[i] = new aiBone;
-        
-        aiBone* bone = mesh->mBones[i];
-        SoulJoint& joint = sk.joints[i];
 
-        bone->mName     = joint.name;
-        
+        aiBone *bone = mesh->mBones[i];
+        SoulJoint &joint = sk.joints[i];
+
+        bone->mName = joint.name;
+
         // both column major
-        aiMatrix4x4& mat = mesh->mBones[i]->mOffsetMatrix;
-        auto& jm = joint.inverseBindposeMatrix;
+        aiMatrix4x4 &mat = mesh->mBones[i]->mOffsetMatrix;
+        auto &jm = joint.inverseBindposeMatrix;
         // assimp row major, glm column major
         mat = aiMatrix4x4(
-            jm[0][0], jm[1][0], jm[2][0], jm[3][0],
-            jm[0][1], jm[1][1], jm[2][1], jm[3][1],
-            jm[0][2], jm[1][2], jm[2][2], jm[3][2],
-            jm[0][3], jm[1][3], jm[2][3], jm[3][3]
-        );
+                jm[0][0], jm[1][0], jm[2][0], jm[3][0],
+                jm[0][1], jm[1][1], jm[2][1], jm[3][1],
+                jm[0][2], jm[1][2], jm[2][2], jm[3][2],
+                jm[0][3], jm[1][3], jm[2][3], jm[3][3]);
     }
 
     // build skin: error
     std::vector<int> boneWeightCount(mesh->mNumBones, 0);
     std::vector<std::vector<std::tuple<uint32_t, float>>> boneWeights(mesh->mNumBones);
-    for(uint32_t i = 0; i < mesh->mNumBones; i++) {
+    for (uint32_t i = 0; i < mesh->mNumBones; i++) {
         boneWeights[i].resize(fbxMesh.vertices.size());
     }
     auto vertexCount = fbxMesh.vertices.size();
-    for(int i = 0; i < vertexCount; i++) {
+    for (int i = 0; i < vertexCount; i++) {
         int vid = i;
         uint8_t weightCounts = fbxMesh.weightCounts[i];
-        glm::uvec4& jointIds = fbxMesh.jointIds[i];
-        glm::vec4& weights = fbxMesh.weights[i];
+        glm::uvec4 &jointIds = fbxMesh.jointIds[i];
+        glm::vec4 &weights = fbxMesh.weights[i];
 
-        for(int j = 0; j < weightCounts; j++) {
+        for (int j = 0; j < weightCounts; j++) {
             auto jointId = jointIds[j];
             auto weight = weights[j];
             if (jointId < mesh->mNumBones) {
-                auto& curIndex = boneWeightCount[jointId];
+                auto &curIndex = boneWeightCount[jointId];
                 boneWeights[jointId][curIndex] = {vid, weight};
                 curIndex++;
             }
         }
     }
-    for(uint32_t i = 0; i < mesh->mNumBones; i++) {
-        aiBone* bone = mesh->mBones[i];
+    for (uint32_t i = 0; i < mesh->mNumBones; i++) {
+        aiBone *bone = mesh->mBones[i];
         bone->mNumWeights = boneWeightCount[i];
         bone->mWeights = new aiVertexWeight[bone->mNumWeights];
-        for(uint32_t j = 0; j < bone->mNumWeights; j++) {
+        for (uint32_t j = 0; j < bone->mNumWeights; j++) {
             bone->mWeights[j].mVertexId = std::get<0>(boneWeights[i][j]);
             bone->mWeights[j].mWeight = std::get<1>(boneWeights[i][j]);
         }
@@ -1087,12 +1139,12 @@ void FBXRWImpl::createSkeleton(SoulSkeletonMesh &fbxMesh, aiMesh* mesh) {
 }
 
 // save one animation
-void FBXRWImpl::createSkeletonAnimation(std::vector<std::shared_ptr<SoulSkeletonMesh>>& skeletonMeshes, aiScene* scene) {
-    
+void
+FBXRWImpl::createSkeletonAnimation(std::vector<std::shared_ptr<SoulSkeletonMesh>> &skeletonMeshes, aiScene *scene) {
     // find animation count
     int index = -1;
-    for(size_t i = 0; i < skeletonMeshes.size(); i++) {
-        auto& sk = skeletonMeshes[i];
+    for (size_t i = 0; i < skeletonMeshes.size(); i++) {
+        auto &sk = skeletonMeshes[i];
         if (sk->animation.channels.size() != 0) {
             index = static_cast<int>(i);
             break;
@@ -1101,67 +1153,126 @@ void FBXRWImpl::createSkeletonAnimation(std::vector<std::shared_ptr<SoulSkeleton
     if (index == -1) {
         return;
     }
-    
 
     // write
-    auto& sk = *skeletonMeshes[index];
-    auto& ani = sk.animation;
-    auto& joints = sk.skeleton.joints;
-    auto& channels = ani.channels;
+    auto &sk = *skeletonMeshes[index];
+    auto &ani = sk.animation;
+    auto &joints = sk.skeleton.joints;
+    auto &channels = ani.channels;
 
     scene->mNumAnimations = 1;
-    scene->mAnimations = new aiAnimation* [1];
+    scene->mAnimations = new aiAnimation *[1];
     scene->mAnimations[0] = new aiAnimation;
-    aiAnimation& animation = *(scene->mAnimations[0]);
+    aiAnimation &animation = *(scene->mAnimations[0]);
 
     assert(ani.name != "");  // warning: cannot save if no name
     animation.mName = ani.name;
     animation.mDuration = ani.duration;
     animation.mTicksPerSecond = ani.ticksPerSecond;
-    animation.mNumChannels = (uint32_t)channels.size();
-    animation.mChannels = new aiNodeAnim* [animation.mNumChannels];
+    animation.mNumChannels = (uint32_t) channels.size();
+    animation.mChannels = new aiNodeAnim *[animation.mNumChannels];
 
-    for(uint32_t j = 0; j < animation.mNumChannels; j++) {
+    for (uint32_t j = 0; j < animation.mNumChannels; j++) {
         animation.mChannels[j] = new aiNodeAnim;
-        
-        auto& nodeAnimation = animation.mChannels[j];
-        auto& channel = channels[j];
+
+        auto &nodeAnimation = animation.mChannels[j];
+        auto &channel = channels[j];
         auto jointId = channel.jointId;
 
-        nodeAnimation->mNodeName =  joints[jointId].name;
+        nodeAnimation->mNodeName = joints[jointId].name;
 
-        nodeAnimation->mNumPositionKeys = (uint32_t)channel.PositionKeys.size();
+        nodeAnimation->mNumPositionKeys = (uint32_t) channel.PositionKeys.size();
         nodeAnimation->mPositionKeys = new aiVectorKey[nodeAnimation->mNumPositionKeys];
         for (uint32_t k = 0; k < nodeAnimation->mNumPositionKeys; k++) {
-            auto& element = nodeAnimation->mPositionKeys[k];
-            auto& e = channel.PositionKeys[k];
+            auto &element = nodeAnimation->mPositionKeys[k];
+            auto &e = channel.PositionKeys[k];
             element.mTime = e.time / animation.mTicksPerSecond;
-            //element.mTime = e.time;
+            // element.mTime = e.time;
             element.mValue = aiVector3D(e.value.x, e.value.y, e.value.z);
         }
 
-        nodeAnimation->mNumRotationKeys = (uint32_t)channel.RotationKeys.size();
+        nodeAnimation->mNumRotationKeys = (uint32_t) channel.RotationKeys.size();
         nodeAnimation->mRotationKeys = new aiQuatKey[nodeAnimation->mNumRotationKeys];
         for (uint32_t k = 0; k < nodeAnimation->mNumRotationKeys; k++) {
-            auto& element = nodeAnimation->mRotationKeys[k];
-            auto& e = channel.RotationKeys[k];
+            auto &element = nodeAnimation->mRotationKeys[k];
+            auto &e = channel.RotationKeys[k];
             element.mTime = e.time / animation.mTicksPerSecond;
-            //element.mTime = e.time;
+            // element.mTime = e.time;
             element.mValue = aiQuaterniont(e.value.w, e.value.x, e.value.y, e.value.z);
         }
 
-        nodeAnimation->mNumScalingKeys = (uint32_t)channel.ScalingKeys.size();
+        nodeAnimation->mNumScalingKeys = (uint32_t) channel.ScalingKeys.size();
         nodeAnimation->mScalingKeys = new aiVectorKey[nodeAnimation->mNumScalingKeys];
         for (uint32_t k = 0; k < nodeAnimation->mNumScalingKeys; k++) {
-            auto& element = nodeAnimation->mScalingKeys[k];
-            auto& e = channel.ScalingKeys[k];
+            auto &element = nodeAnimation->mScalingKeys[k];
+            auto &e = channel.ScalingKeys[k];
             element.mTime = e.time / animation.mTicksPerSecond;
-            //element.mTime = e.time;
+            // element.mTime = e.time;
             element.mValue = aiVector3D(e.value.x, e.value.y, e.value.z);
         }
     }
-            
-    
 }
 
+std::vector<Texture> FBXRWImpl::loadMaterialTextures(aiMaterial *mat, aiTextureType type, std::string typeName) {
+    std::vector<Texture> textures;
+    for (unsigned int i = 0; i < mat->GetTextureCount(type); i++) {
+        aiString str;
+        mat->GetTexture(type, i, &str);
+        // check if texture was loaded before and if so, continue to next iteration: skip loading a new texture
+        bool skip = false;
+        for (unsigned int j = 0; j < textures_loaded.size(); j++) {
+            if (std::strcmp(textures_loaded[j].path.data(), str.C_Str()) == 0) {
+                textures.push_back(textures_loaded[j]);
+                skip = true;  // a texture with the same filepath has already been loaded, continue to next one. (optimization)
+                break;
+            }
+        }
+        if (!skip) {  // if texture hasn't been loaded already, load it
+            Texture texture;
+            texture.data = TextureFromFile(str.C_Str(), this->directory);
+            texture.type = typeName;
+            texture.path = str.C_Str();
+            textures.push_back(texture);
+            textures_loaded.push_back(
+                    texture);  // store it as texture loaded for entire model, to ensure we won't unnecessary load duplicate textures.
+        }
+    }
+    return textures;
+}
 
+unsigned char *FBXRWImpl::TextureFromFile(const char *path, const std::string &directory, bool gamma) {
+    std::string filename = std::string(path);
+    filename = directory + '/' + filename;
+
+//    unsigned int textureID;
+//    glGenTextures(1, &textureID);
+
+    int width, height, nrComponents;
+    unsigned char *data = stbi_load(filename.c_str(), &width, &height, &nrComponents, 0);
+    if (data) {
+        return data;
+//        GLenum format;
+//        if (nrComponents == 1)
+//            format = GL_RED;
+//        else if (nrComponents == 3)
+//            format = GL_RGB;
+//        else if (nrComponents == 4)
+//            format = GL_RGBA;
+//
+//        glBindTexture(GL_TEXTURE_2D, textureID);
+//        glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+//        glGenerateMipmap(GL_TEXTURE_2D);
+//
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+//
+//        stbi_image_free(data);
+    } else {
+        std::cout << "Texture failed to load at path: " << path << std::endl;
+        stbi_image_free(data);
+    }
+
+    return nullptr;
+}

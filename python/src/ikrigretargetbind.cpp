@@ -5,11 +5,11 @@
 //  Created by kai chen on 3/24/23.
 //
 
-#include "ikrigretargetapi.hpp"
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
+#include "ikrigretargetapi.hpp"
 
 #define STRINGIFY(x) #x
 #define MACRO_STRINGIFY(x) STRINGIFY(x)
@@ -17,7 +17,6 @@
 namespace py = pybind11;
 
 using namespace SoulIK;
-
 
 static inline std::string to_string(bool bValue) {
     return bValue ? "true" : "false";
@@ -28,7 +27,6 @@ PYBIND11_MAKE_OPAQUE(std::vector<SoulIKRigRetargetConfig::SoulIKRigChain>);
 PYBIND11_MAKE_OPAQUE(std::vector<SoulIKRigRetargetConfig::SoulIKRigChainMapping>);
 
 PYBIND11_MODULE(ikrigretarget, m) {
-
     py::bind_vector<std::vector<int>>(m, "VectorInt");
     py::bind_vector<std::vector<SoulIKRigRetargetConfig::SoulIKRigChain>>(m, "VectorSoulIKRigChain");
     py::bind_vector<std::vector<SoulIKRigRetargetConfig::SoulIKRigChainMapping>>(m, "VectorSoulIKRigChainMapping");
@@ -39,10 +37,10 @@ PYBIND11_MODULE(ikrigretarget, m) {
 
     py::enum_<CoordType>(m, "CoordType")
         .value("RightHandZupYfront", CoordType::RightHandZupYfront)
-        .value("RightHandYupZfront", CoordType::RightHandYupZfront);
+        .value("RightHandYupZfront", CoordType::RightHandYupZfront)
         //.export_values(); // to parent space
 
-    py::enum_<ERootType>(m, "ERootType")
+        py::enum_<ERootType>(m, "ERootType")
         .value("RootZ", ERootType::RootZ)
         .value("RootZMinusGroundZ", ERootType::RootZMinusGroundZ)
         .value("Ignore", ERootType::Ignore);
@@ -54,13 +52,8 @@ PYBIND11_MODULE(ikrigretarget, m) {
         .def_readwrite("startBone", &SoulIKRigRetargetConfig::SoulIKRigChain::startBone)
         .def_readwrite("endBone", &SoulIKRigRetargetConfig::SoulIKRigChain::endBone)
         .def("__repr__", [](const SoulIKRigRetargetConfig::SoulIKRigChain& a) {
-                return std::string("<SoulIKRigChain:") + "\n"
-                + "chainName:" + a.chainName + "\n"
-                + "startBone:" + a.startBone + "\n"
-                + "endBone:" + a.endBone + "\n"
-                + ">";
-            }
-        );
+            return std::string("<SoulIKRigChain:") + "\n" + "chainName:" + a.chainName + "\n" + "startBone:" + a.startBone + "\n" + "endBone:" + a.endBone + "\n" + ">";
+        });
 
     py::class_<SoulIK::SoulIKRigRetargetConfig::SoulIKRigChainMapping>(m, "SoulIKRigChainMapping")
         .def(py::init())
@@ -70,14 +63,8 @@ PYBIND11_MODULE(ikrigretarget, m) {
         .def_readwrite("SourceChain", &SoulIKRigRetargetConfig::SoulIKRigChainMapping::SourceChain)
         .def_readwrite("TargetChain", &SoulIKRigRetargetConfig::SoulIKRigChainMapping::TargetChain)
         .def("__repr__", [](const SoulIKRigRetargetConfig::SoulIKRigChainMapping& a) {
-                return std::string("<SoulIKRigChainMapping:") + "\n"
-                + "EnableFK:" + to_string(a.EnableFK) + "\n"
-                + "EnableIK:" + to_string(a.EnableIK) + "\n"
-                + "SourceChain:" + a.SourceChain + "\n"
-                + "TargetChain:" + a.TargetChain + "\n"
-                + ">";
-            }
-        );
+            return std::string("<SoulIKRigChainMapping:") + "\n" + "EnableFK:" + to_string(a.EnableFK) + "\n" + "EnableIK:" + to_string(a.EnableIK) + "\n" + "SourceChain:" + a.SourceChain + "\n" + "TargetChain:" + a.TargetChain + "\n" + ">";
+        });
 
     py::class_<SoulIK::SoulIKRigRetargetConfig> config(m, "SoulIKRigRetargetConfig");
     config
@@ -133,18 +120,15 @@ PYBIND11_MODULE(ikrigretarget, m) {
 
     )pbdoc");
 
-
-
 #ifdef VERSION_INFO
 
-#define v0 MACRO_STRINGIFY(VERSION_INFO)0
-#if v11 == 0
+#    define v0 MACRO_STRINGIFY(VERSION_INFO) 0
+#    if v11 == 0
     m.attr("__version__") = "dev";
-#else
+#    else
     m.attr("__version__") = MACRO_STRINGIFY(VERSION_INFO);
-#endif
+#    endif
 #else
     m.attr("__version__") = "dev";
 #endif
 }
-
